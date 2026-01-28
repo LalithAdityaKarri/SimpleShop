@@ -1,0 +1,91 @@
+# For most projects, this workflow file will not need changing; you simply need
+# to commit it to your repository.
+#
+# You may wish to alter this file to override the set of languages analyzed,
+# or to provide custom queries or build logic.
+#
+# ******** NOTE ********
+# We have attempted to detect the languages in your repository. Please check
+# the `language` matrix defined below to confirm you have the correct set of
+# supported CodeQL languages.
+#
+name: "CodeQL"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '37 17 * * 1'
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'csharp' ]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: ${{ matrix.language }}
+        # security-extended finds deeper bugs like hardcoded passwords
+        queries: security-extended 
+
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:${{matrix.language}}"
+        # This creates the file that our summary script needs to read
+        output: sarif-results
+
+    - name: Check for Critical Vulnerabilities
+      shell: bash
+      run: |
+        # 1. Install jq to read the results
+        sudo apt-get install -y jq > /dev/null 2>&1
+
+        # 2. Find the results file
+        SARIF_FILE=$(find sarif-results -name "*.sarif" | head -n 1)
+
+        echo "=========================================="
+        echo "           CODEQL SCAN SUMMARY            "
+        echo "=========================================="
+
+        if [ -z "$SARIF_FILE" ]; then
+          echo "No SARIF results file found."
+          echo "Total Findings (All types):        0"
+          echo "Critical Security Vulnerabilities: 0"
+        else
+          # 3. Count total findings and "error" level findings (Criticals)
+          TOTAL_FINDINGS=$(jq '.runs[0].results | length' "$SARIF_FILE" || echo "0")
+          CRITICAL_FINDINGS=$(jq '[.runs[0].results[]? | select(.level == "error")] | length' "$SARIF_FILE" || echo "0")
+
+          echo "File Analyzed:                     $(basename $SARIF_FILE)"
+          echo "Total Findings (All types):        $TOTAL_FINDINGS"
+          echo "Critical Security Vulnerabilities: $CRITICAL_FINDINGS"
+        fi
+        echo "=========================================="
+
+        # 4. Show a final pass/fail message
+        if [ "$CRITICAL_FINDINGS" -gt 0 ]; then
+          echo "❌ FAILED: $CRITICAL_FINDINGS critical vulnerabilities found."
+          # exit 1 # Remove the '#' at the start of 'exit 1' if you want the build to turn RED on failure
+        else
+          echo "✅ PASSED: No critical vulnerabilities found."
+        fi
