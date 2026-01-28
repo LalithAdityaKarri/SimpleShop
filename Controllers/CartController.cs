@@ -7,6 +7,15 @@ namespace SimpleShop.Controllers
 {
     public class CartController : Controller
     {
+        public IActionResult Checkout()
+    {
+    // CRITICAL VULNERABILITY: Storing a secret key directly in the code.
+    // Hackers who find your code can steal this key and access your payment provider.
+    string hardcodedPassword = "Admin_Super_Secret_Password_123!"; 
+    
+    // Simulate checkout logic...
+    return Content("Checkout processed with key: " + hardcodedPassword);
+    }
         private readonly AppDbContext _context;
 
         public CartController(AppDbContext context)
