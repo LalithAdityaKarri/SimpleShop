@@ -57,35 +57,32 @@ jobs:
     - name: Check for Critical Vulnerabilities
       shell: bash
       run: |
-        # 1. Install jq to read the results
         sudo apt-get install -y jq > /dev/null 2>&1
-
-        # 2. Find the results file
-        SARIF_FILE=$(find sarif-results -name "*.sarif" | head -n 1)
-
+        
+        # This ensures we only look at the file for the CURRENT language in the matrix
+        SARIF_FILE="sarif-results/${{ matrix.language }}.sarif"
+        
         echo "=========================================="
-        echo "           CODEQL SCAN SUMMARY            "
+        echo "      CODEQL SUMMARY FOR: ${{ matrix.language }} "
         echo "=========================================="
-
-        if [ -z "$SARIF_FILE" ]; then
-          echo "No SARIF results file found."
-          echo "Total Findings (All types):        0"
-          echo "Critical Security Vulnerabilities: 0"
-        else
-          # 3. Count total findings and "error" level findings (Criticals)
-          TOTAL_FINDINGS=$(jq '.runs[0].results | length' "$SARIF_FILE" || echo "0")
-          CRITICAL_FINDINGS=$(jq '[.runs[0].results[]? | select(.level == "error")] | length' "$SARIF_FILE" || echo "0")
-
-          echo "File Analyzed:                     $(basename $SARIF_FILE)"
-          echo "Total Findings (All types):        $TOTAL_FINDINGS"
-          echo "Critical Security Vulnerabilities: $CRITICAL_FINDINGS"
+        
+        if [ ! -f "$SARIF_FILE" ]; then
+          echo "Error: Result file $SARIF_FILE not found."
+          exit 0
         fi
-        echo "=========================================="
 
-        # 4. Show a final pass/fail message
-        if [ "$CRITICAL_FINDINGS" -gt 0 ]; then
-          echo "❌ FAILED: $CRITICAL_FINDINGS critical vulnerabilities found."
-          # exit 1 # Remove the '#' at the start of 'exit 1' if you want the build to turn RED on failure
+        # Count High/Critical (Level: error)
+        CRITICALS=$(jq '[.runs[0].results[]? | select(.level == "error")] | length' "$SARIF_FILE" || echo "0")
+        
+        # Count Medium/Low (Level: warning)
+        WARNINGS=$(jq '[.runs[0].results[]? | select(.level == "warning")] | length' "$SARIF_FILE" || echo "0")
+        
+        echo "Critical Vulnerabilities (Errors): $CRITICALS"
+        echo "Medium/Low Vulnerabilities (Warnings): $WARNINGS"
+        echo "=========================================="
+        
+        if [ "$CRITICALS" -gt 0 ]; then
+          echo "❌ FAILED: $CRITICALS critical issues found."
         else
-          echo "✅ PASSED: No critical vulnerabilities found."
+          echo "✅ PASSED: No critical issues found (only $WARNINGS warnings)."
         fi
